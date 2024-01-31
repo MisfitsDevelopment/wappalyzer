@@ -1,8 +1,6 @@
+use regex::Regex;
 use serde::de;
 use serde::{Deserialize, Deserializer, Serialize};
-
-use futures::future::join_all;
-use regex::Regex;
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
@@ -32,18 +30,15 @@ pub struct RawData {
 }
 
 pub async fn check(raw_data: Arc<RawData>) -> Vec<Tech> {
-    let mut futures: Vec<tokio::task::JoinHandle<Option<Tech>>> = vec![];
+    let mut tech = vec![];
 
     for app in APPS_JSON_DATA.apps.values() {
-        futures.push(app.tech_tokio(raw_data.clone()));
+        tech.push(app.tech_tokio(raw_data.clone()));
     }
 
-    join_all(futures)
-        .await
-        .iter()
-        .filter_map(|r| r.as_ref().ok())
-        .filter(|o| o.is_some())
-        .map(|r| r.as_ref().unwrap().to_owned())
+    tech.iter()
+        .filter_map(|r| r.as_ref())
+        .map(|r| r.to_owned())
         .collect::<Vec<_>>()
 }
 
@@ -175,17 +170,12 @@ impl App {
     //     }
     // }
 
-    pub fn tech_tokio(
-        &'static self,
-        raw_data: Arc<RawData>,
-    ) -> tokio::task::JoinHandle<Option<Tech>> {
-        tokio::spawn(async move {
-            if self.check(raw_data.clone()) {
-                Some(Tech::from(self))
-            } else {
-                None
-            }
-        })
+    pub fn tech_tokio(&'static self, raw_data: Arc<RawData>) -> Option<Tech> {
+        if self.check(raw_data.clone()) {
+            Some(Tech::from(self))
+        } else {
+            None
+        }
     }
 
     // TODO: initially only checking for one positive
